@@ -1,85 +1,182 @@
-FROM solita/ubuntu-systemd
+FROM ubuntu:focal
+
+ARG uid=1000
+ARG user=indy
+
+ARG DEBIAN_FRONTEND=noninteractive
+ENV TZ=America/Los_Angeles
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+RUN DEBIAN_FRONTEND=noninteractive apt-get update && apt-get install -y 
+
+# Don't start any optional services except for the few we need.
+RUN find /etc/systemd/system \
+    /lib/systemd/system \
+    -path '*.wants/*' \
+    -not -name '*journald*' \
+    -not -name '*systemd-tmpfiles*' \
+    -not -name '*systemd-user-sessions*' \
+    -exec rm \{} \;
 
 # Install environment
 RUN apt-get update -y && apt-get install -y \
-        git \
-        wget \
-        python3.5 \
-        python3-pip \
-        python-setuptools \
-        python3-nacl \
-        apt-transport-https \
-        ca-certificates \
-        ssh \
-        vim \
-        mc \
-        stress \
-	&& rm -rf /var/lib/apt/lists/*
+    git \
+    wget \
+    python3-pip \
+    python3-nacl \
+    python-setuptools \
+    python3-nacl \
+    apt-transport-https \
+    ca-certificates \
+    ssh \
+    vim \
+    mc \
+    stress \
+    dbus \
+    # rocksdb python wrapper
+    rocksdb-tools \
+    librocksdb5.17 \
+    librocksdb-dev \
+    libsnappy-dev \
+    liblz4-dev \
+    libbz2-dev \
+    && rm -rf /var/lib/apt/lists/*
 
+# pip<10.0.0 is important. pip==10.0.0 doesn't work.
 RUN pip3 install -U \
-        'pip<10.0.0' \
-        setuptools
+    'pip<10.0.0' \
+    setuptools
 
-ARG INDY_NODE_REPO_COMPONENT
-ARG LIBINDY_CRYPTO_VERSION
-ARG PYTHON3_LIBINDY_CRYPTO_VERSION
-ARG INDY_PLENUM_VERSION
-ARG INDY_NODE_VERSION
-ENV INDY_NODE_REPO_COMPONENT=${INDY_NODE_REPO_COMPONENT:-rc}
-ENV LIBINDY_CRYPTO_VERSION=${LIBINDY_CRYPTO_VERSION:-0.4.5}
-ENV PYTHON3_LIBINDY_CRYPTO_VERSION=${PYTHON3_LIBINDY_CRYPTO_VERSION:-0.4.5}
-ENV PYTHON3_PYZMQ_VERSION=${PYTHON3_PYZMQ_VERSION:-18.1.0}
-ENV INDY_PLENUM_VERSION=${INDY_PLENUM_VERSION:-1.12.2}
-ENV INDY_NODE_VERSION=${INDY_NODE_VERSION:-1.12.2~rc1}
-# ENV INDY_NODE_REPO_COMPONENT=${INDY_NODE_REPO_COMPONENT:-master}
-# ENV LIBINDY_CRYPTO_VERSION=${LIBINDY_CRYPTO_VERSION:-0.4.5}
-# ENV PYTHON3_LIBINDY_CRYPTO_VERSION=${PYTHON3_LIBINDY_CRYPTO_VERSION:-0.4.5}
-# ENV PYTHON3_PYZMQ_VERSION=${PYTHON3_PYZMQ_VERSION:-18.1.0}
-# ENV INDY_PLENUM_VERSION=${INDY_PLENUM_VERSION:-1.13.0~dev1012}
-# ENV INDY_NODE_VERSION=${INDY_NODE_VERSION:-1.13.0~dev1199}
+# sovrin repo init
+ARG NODE_REPO_COMPONENT
+RUN : ${NODE_REPO_COMPONENT:?"NODE_REPO_COMPONENT must be provided"}
+ENV NODE_REPO_COMPONENT=${NODE_REPO_COMPONENT}
+
 RUN apt-key adv --keyserver keyserver.ubuntu.com --recv-keys CE7709D068DB5E88 \
-    && echo "deb https://repo.sovrin.org/deb xenial ${INDY_NODE_REPO_COMPONENT}" >> /etc/apt/sources.list \
-    && apt-get update -y && apt-get install -y \
-        libindy-crypto=${LIBINDY_CRYPTO_VERSION} \
-        python3-indy-crypto=${PYTHON3_LIBINDY_CRYPTO_VERSION} \
-        python3-pyzmq=${PYTHON3_PYZMQ_VERSION} \
-        indy-plenum=${INDY_PLENUM_VERSION} \
-        indy-node=${INDY_NODE_VERSION} \
-	&& rm -rf /var/lib/apt/lists/*
+    && apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv 9692C00E657DDE61 \ 
+    && echo "deb https://hyperledger.jfrog.io/artifactory/indy focal dev" >> /etc/apt/sources.list \
+    && echo "deb https://repo.sovrin.org/deb xenial ${NODE_REPO_COMPONENT}" >> /etc/apt/sources.list \
+    && echo "deb https://repo.sovrin.org/deb xenial master" >> /etc/apt/sources.list \
+    && echo "deb http://security.ubuntu.com/ubuntu bionic-security main"  >> /etc/apt/sources.list \
+    && echo "deb https://repo.sovrin.org/deb bionic master" >> /etc/apt/sources.list \
+    && echo "deb https://repo.sovrin.org/sdk/deb bionic master" >> /etc/apt/sources.list \
+    && apt-get update -y
 
+# indy depedencies
+ARG LIBINDY_CRYPTO_VERSION
+RUN : ${LIBINDY_CRYPTO_VERSION:?"LIBINDY_CRYPTO_VERSION must be provided"}
+ENV LIBINDY_CRYPTO_VERSION=${LIBINDY_CRYPTO_VERSION}
+
+ARG PYTHON3_LIBINDY_CRYPTO_VERSION
+RUN : ${PYTHON3_LIBINDY_CRYPTO_VERSION:?"PYTHON3_LIBINDY_CRYPTO_VERSION must be provided"}
+ENV PYTHON3_LIBINDY_CRYPTO_VERSION=${PYTHON3_LIBINDY_CRYPTO_VERSION}
+
+ARG PYTHON3_PYZMQ_VERSION
+RUN : ${PYTHON3_PYZMQ_VERSION:?"PYTHON3_PYZMQ_VERSION must be provided"}
+ENV PYTHON3_PYZMQ_VERSION=${PYTHON3_PYZMQ_VERSION}
+
+ARG INDY_PLENUM_VERSION
+RUN : ${INDY_PLENUM_VERSION:?"INDY_PLENUM_VERSION must be provided"}
+ENV INDY_PLENUM_VERSION=${INDY_PLENUM_VERSION}
+
+ARG INDY_NODE_VERSION
+RUN : ${INDY_NODE_VERSION:?"INDY_NODE_VERSION must be provided"}
+ENV INDY_NODE_VERSION=${INDY_NODE_VERSION}
+
+RUN apt-get install -y \
+    python3-pyzmq=${PYTHON3_PYZMQ_VERSION} \
+    indy-plenum=${INDY_PLENUM_VERSION} \
+    indy-node=${INDY_NODE_VERSION} \
+    libssl1.0.0 \
+    libssl1.1 \ 
+    libindy=1.15.0~1625-bionic \
+    ursa \
+    libsodium23
+
+# TODO: Move to Sovrin tests
 # sovrin & token plugins
-# FIXME
-#   - for now it's tricky to set proper versions for master artifacts
-#   - defaults are for stable
-ARG TOKEN_PLUGINS_INSTALL
+ARG SOVRIN_INSTALL
 ARG SOVRIN_VERSION
-ARG SOVTOKEN_VERSION
-ARG SOVTOKENFEES_VERSION
-ENV TOKEN_PLUGINS_INSTALL=$TOKEN_PLUGINS_INSTALL
+ENV SOVRIN_INSTALL=$SOVRIN_INSTALL
 ENV SOVRIN_VERSION=${SOVRIN_VERSION:-1.1.69}
-ENV SOVTOKEN_VERSION=${SOVTOKEN_VERSION:-1.0.8~dev151}
-# ENV SOVRIN_VERSION=${SOVRIN_VERSION:-1.1.207}
-# ENV SOVTOKEN_VERSION=${SOVTOKEN_VERSION:-1.0.8~dev150}
-ENV SOVTOKENFEES_VERSION=${SOVTOKENFEES_VERSION:-${SOVTOKEN_VERSION}}
-#RUN if [ "$TOKEN_PLUGINS_INSTALL" = "yes" ]; then \
-RUN \
-        set -ex; \
-        apt-get update && apt-get install -y \
-            sovrin=${SOVRIN_VERSION} \
-            sovtoken=${SOVTOKEN_VERSION} \
-            sovtokenfees=${SOVTOKENFEES_VERSION}; \
-        rm -rf /var/lib/apt/lists/*; \
+COPY . . 
+RUN if [ -z "$SOVRIN_INSTALL" ]; then \
+    dpkg -i "sovrin_${SOVRIN_VERSION}_amd64.deb"; \
     fi
 
+RUN pip3 install -U \ 
+    Pygments==2.2.0 \
+    Pympler==0.8 \
+    PyNaCl==1.3.0 \
+    apipkg==1.5 \
+    attrs==20.3.0 \
+    base58==2.1.0 \
+    distro==1.5.0 \
+    execnet==1.8.0 \
+    flake8==3.8.4 \
+    iniconfig==1.1.1 \
+    intervaltree==2.1.0 \
+    ioflo==2.0.2 \
+    jsonpickle==2.0.0 \
+    leveldb==0.201 \
+    libnacl==1.7.2 \
+    mccabe==0.6.1 \
+    msgpack-python==0.5.6 \
+    orderedset==2.0.3 \
+    packaging==20.9 \
+    pip==9.0.3 \
+    pluggy==0.13.1 \
+    portalocker==2.2.1 \
+    prompt-toolkit==3.0.16 \
+    psutil==5.6.6 \
+    py==1.10.0 \
+    pycodestyle==2.6.0 \
+    pyflakes==2.2.0 \
+    pyparsing==2.4.7 \
+    pytest==6.2.2 \
+    pytest-asyncio==0.14.0 \
+    pytest-forked==1.3.0 \
+    pytest-runner==5.3.0 \
+    pytest-xdist==2.2.1 \
+    python-dateutil==2.6.1 \
+    python-rocksdb==0.7.0 \
+    python-ursa==0.1.1 \
+    python3-indy==1.15.0-dev-1625 \
+    pyzmq==18.1.0 \
+    rlp==0.6.0 \
+    semver==2.13.0 \
+    setuptools==53.0.0 \
+    sha3==0.2.1 \
+    six==1.15.0 \
+    sortedcontainers==1.5.7 \
+    timeout-decorator==0.5.0 \
+    toml==0.10.2 \
+    ujson==1.33 \
+    wcwidth==0.2.5 \
+    wheel==0.34.2 \
+    zipp==1.2.0 \
+    mock
+
+COPY . .
+RUN dpkg -i libsovtoken_1.0.2_amd64.deb
+
+# repo cleanup
+RUN sed '/deb https:\/\/repo.sovrin.org\/sdk\/deb xenial ${NODE_REPO_COMPONENT}/d' /etc/apt/sources.list \
+    && rm -rf /var/lib/apt/lists/*
+
+# network config
 RUN echo " " >> /etc/indy/indy_config.py \
     && echo "NETWORK_NAME = 'sandbox'" >> /etc/indy/indy_config.py \
     && echo " " >> /etc/indy/indy_config.py \
     && echo "logLevel = 0" >> /etc/indy/indy_config.py \
     && echo " " >> /etc/indy/indy_config.py
 
-RUN sed -i 's/PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config
-COPY test_key.pub /root/.ssh/authorized_keys
-## hotfix indy-node-control files here
-#COPY node_control_utils_1_1_35.py /usr/local/lib/python3.5/dist-packages/indy_node/utils/node_control_utils.py
-#RUN chmod 644 /usr/local/lib/python3.5/dist-packages/indy_node/utils/node_control_utils.py \
-#    && chown root:root /usr/local/lib/python3.5/dist-packages/indy_node/utils/node_control_utils.py
+RUN pip list
+RUN apt list --installed
+RUN systemctl set-default multi-user.target
+
+COPY setup /sbin/
+
+STOPSIGNAL SIGRTMIN+3
+
+# Workaround for docker/docker#27202, technique based on comments from docker/docker#9212
+CMD ["/bin/bash", "-c", "exec /sbin/init --log-target=journal 3>&1"]

@@ -1,5 +1,10 @@
 #!/bin/bash
 
+set -o errexit
+set -o pipefail
+#set -o nounset
+set -o xtrace
+
 DEF_TEST_NETWORK_NAME="indy-test-automation-network"
 # TODO limit default subnet range to reduce risk of overlapping with system resources
 DEF_TEST_NETWORK_SUBNET="10.0.0.0/24"
@@ -18,8 +23,6 @@ if [ "$1" = "--help" ] ; then
     exit 0
 fi
 
-set -ex
-
 test_network_name="${1:-$DEF_TEST_NETWORK_NAME}"
 test_network_subnet="${2:-$DEF_TEST_NETWORK_SUBNET}"
 
@@ -34,14 +37,13 @@ image_repository="hyperledger/indy-test-automation"
 docker_compose_image_name="${image_repository}:docker-compose"
 
 node_env_variables=" \
-    PYTHON3_VERSION \
-    LIBINDY_REPO_COMPONENT \
+    NODE_REPO_COMPONENT \
     LIBINDY_VERSION \
     LIBSOVTOKEN_INSTALL \
     LIBSOVTOKEN_VERSION \
 "
 client_env_variables=" \
-    INDY_NODE_REPO_COMPONENT \
+    CLIENT_REPO_COMPONENT \
     LIBINDY_CRYPTO_VERSION \
     PYTHON3_LIBINDY_CRYPTO_VERSION \
     INDY_PLENUM_VERSION \
@@ -72,8 +74,7 @@ docker run -t --rm \
     -u "$user_id" \
     -e "IMAGE_REPOSITORY=$image_repository" \
     -e u_id="$user_id" \
-    -e PYTHON3_VERSION \
-    -e LIBINDY_REPO_COMPONENT \
+    -e CLIENT_REPO_COMPONENT \
     -e LIBINDY_VERSION \
     -e LIBSOVTOKEN_INSTALL \
     -e LIBSOVTOKEN_VERSION \
@@ -88,9 +89,10 @@ docker run -t --rm \
     -u "$user_id" \
     -e "IMAGE_REPOSITORY=$image_repository" \
     -e u_id="$user_id" \
-    -e INDY_NODE_REPO_COMPONENT \
+    -e NODE_REPO_COMPONENT \
     -e LIBINDY_CRYPTO_VERSION \
     -e PYTHON3_LIBINDY_CRYPTO_VERSION \
+    -e PYTHON3_PYZMQ_VERSION \
     -e INDY_PLENUM_VERSION \
     -e INDY_NODE_VERSION \
     -e TOKEN_PLUGINS_INSTALL \
@@ -101,7 +103,7 @@ docker run -t --rm \
 
 docker images "$image_repository"
 
-# 4. clean existing envronment
+# 4. clean existing environment
 $docker_routine_path/clean.sh "$test_network_name"
 
 # 5. remove test network if exists
