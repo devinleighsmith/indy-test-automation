@@ -66,16 +66,16 @@ RUN if [ "$SOVRIN_INSTALL" = "yes" ]; then \
     dpkg -i "sovrin_${SOVRIN_VERSION}_amd64.deb"; \
     fi
 
-# ARG SOVTOKEN_VERSION
-# ARG SOVTOKENFEES_VERSION
-# ENV SOVTOKEN_VERSION=${SOVTOKEN_VERSION:-1.0.8~dev153}
-# ENV SOVTOKENFEES_VERSION=${SOVTOKENFEES_VERSION:-${SOVTOKEN_VERSION}}
-# RUN \
-#     set -ex; \
-#     apt-get update && apt-get install -y \
-#     sovtoken=${SOVTOKEN_VERSION} \
-#     sovtokenfees=${SOVTOKENFEES_VERSION}; \
-#     rm -rf /var/lib/apt/lists/*; 
+ARG SOVTOKEN_VERSION
+ARG SOVTOKENFEES_VERSION
+ENV SOVTOKEN_VERSION=${SOVTOKEN_VERSION:-1.0.8~dev153}
+ENV SOVTOKENFEES_VERSION=${SOVTOKENFEES_VERSION:-${SOVTOKEN_VERSION}}
+RUN \
+    set -ex; \
+    apt-get update && apt-get install -y \
+    sovtoken=${SOVTOKEN_VERSION} \
+    sovtokenfees=${SOVTOKENFEES_VERSION}; \
+    rm -rf /var/lib/apt/lists/*; 
 
 # repo cleanup
 RUN sed '/deb https:\/\/repo.sovrin.org\/sdk\/deb xenial ${NODE_REPO_COMPONENT}/d' /etc/apt/sources.list \
